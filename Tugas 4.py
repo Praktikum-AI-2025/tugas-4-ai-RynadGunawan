@@ -13,7 +13,7 @@ import urllib.request
 import zipfile
 import tensorflow as tf
 import os
-from keras_preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.optimizers import RMSprop
 
 
@@ -30,8 +30,10 @@ def solution_05():
     zip_ref = zipfile.ZipFile(local_file, 'r')
     zip_ref.extractall('data/validation-horse-or-human')
     zip_ref.close()
-
+    
     TRAINING_DIR = 'data/horse-or-human'
+    VALIDATION_DIR = 'data/validation-horse-or-human'
+
     train_datagen = ImageDataGenerator(
         rescale=1/255,
         rotation_range=40,
@@ -43,13 +45,65 @@ def solution_05():
 
     train_generator= ImageDataGenerator(rescale=1./255)
     
-    # YOUR CODE HERE
+    train_datagen = ImageDataGenerator(
+        rescale=1/255,
+        rotation_range=40,
+        horizontal_flip=True,
+        shear_range=0.2,
+        zoom_range=0.2,
+        fill_mode='nearest'
+    )
 
+    validation_datagen = ImageDataGenerator(rescale=1./255)
+
+    train_generator = train_datagen.flow_from_directory(
+        TRAINING_DIR,
+        target_size=(150,150),
+        class_mode='binary',
+        batch_size=32
+    )
+
+    validation_generator = validation_datagen.flow_from_directory(
+        VALIDATION_DIR,
+        target_size=(150,150),
+        class_mode='binary',
+        batch_size=32
+    )
     model=tf.keras.models.Sequential([
-        # YOUR CODE HERE, end with a Neuron Dense, activated by sigmoid
-
+        # end with a Neuron Dense, activated by sigmoid
+        tf.keras.layers.Input(shape=(150,150,3)),
+        tf.keras.layers.Conv2D(16, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Conv2D(32, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(512, activation='relu'),
                 tf.keras.layers.Dense(1, activation='sigmoid') #DO NOT CHANGE THIS LINE!
         ])
+
+    model.compile(
+        loss='binary_crossentropy',
+        optimizer=RMSprop(learning_rate=0.001),
+        metrics=['accuracy']
+    )
+
+    class Stopping(tf.keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            acc = logs.get("accuracy")
+            val_acc = logs.get("val_accuracy")
+            if acc is not None and val_acc is not None:
+                if acc > 0.83 and val_acc > 0.83:
+                    print(f"\nStopping : accuracy = {acc:.4f}, val_accuracy = {val_acc:.4f}")
+                    self.model.stop_training = True
+
+    model.fit(
+        train_generator,
+        validation_data=validation_generator,
+        epochs=15,
+        callbacks=[Stopping()]
+    )
 
     return model
 
